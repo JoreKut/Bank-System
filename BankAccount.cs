@@ -1,75 +1,183 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Bank
 {
-    class History_Actions
-    {
-        public string type;
-        public string sum;
-        public int current_balance;
+    class BankAccount : Program
+    {   
 
-        public History_Actions(string type, string sum, int current_balance)
+        public static int account_count = 1;
+        public string User_Name;
+        public string PASSWORD;
+        public string ID;
+        public string Message_Type;
+        public double Balance;
+        public string History_PATH = @"C:\Users\firef\source\repos\Bank\USERS\Users_History\";
+        public bool Theme_Color = true; //true == Black  
+        // Initialization
+        public BankAccount(string User_Name, string PASSWORD, double Balance, bool Theme_Color)
         {
-            this.type = type;
-            this.sum = sum;
-            this.current_balance = current_balance;
-        }
+            this.User_Name = User_Name;
+            this.PASSWORD = PASSWORD;
+            this.Balance = Balance;
+            this.Theme_Color = Theme_Color;
+            ID = Next_ID(account_count);
 
-        public override string ToString() => $"{type,15} | {sum,-7} | {current_balance}";
-    }
-    class BankAccount
-    {
-        private static int account_count = 0;
-        private string user_name;
-        private int Balance { get; set; }
-        public List<History_Actions> History_Actions = new List<History_Actions>();
+            History_PATH += ID + @".txt";
 
+            if (!File.Exists(History_PATH))
+            {
+                using (StreamWriter w = new StreamWriter(History_PATH, true, Encoding.GetEncoding(1251)))
+                {
+                    w.WriteLine($"Date of creation : {DateTime.Now} \nBalance : {Balance}\nOPERATION HISTORY : ");
+                    w.WriteLine("-----------------------------------------------------------------------------------------");
+                }
+            }
 
-        // Инициализация
-        public BankAccount(string user_name)
-        {
-            this.user_name = user_name;
-            Balance = 0;
             account_count += 1;
+
+        }
+        public string Next_ID(int count)
+        {
+            string ID = "";
+
+            int ID_LEN = 5;
+            int C_Len = count == 0 ? 1 : 0;
+            int tmp = count;
+            while(tmp > 0)
+            {
+                C_Len += 1;
+                tmp /= 10;
+            }
+
+            for (int i = 0; i < ID_LEN-C_Len; i++)
+            {
+                ID += "0";
+            }
+
+            return ID + Convert.ToString(count);
         }
 
-        // Пополнить счет add >= 0
-        public void Money_Top_Up(int amount)
+        // Top Up Cash
+        public void Money_Top_Up(double amount)
         {
-            amount *= amount > 0 ? 1 : -1;
+            amount = Math.Abs(amount);
             Balance += amount;
-            History_Actions.Add(new History_Actions("Cash Top Up  ", "+" + Convert.ToString(amount), Balance));
+            Message_Type = "Cash Top  Up           ";
+            using (StreamWriter w = new StreamWriter(History_PATH, true, Encoding.GetEncoding(1251)))
+            {
+                w.WriteLine($"{Message_Type,-37} | +{amount,-7} | {Balance,-8} | {DateTime.Now}");
+                w.WriteLine("-----------------------------------------------------------------------------------------");
+            }
         }
-        // Совершить перевод
-        public void Money_Transfer(int amount)
+
+        // Make a payment
+        public void Money_Payment(double amount)
         {
-            amount *= amount > 0 ? -1 : 1; // Всегда отрицательное
-            Balance += amount;
-            History_Actions.Add(new History_Actions("Cash Transfer", Convert.ToString(amount), Balance));
+            amount = Math.Abs(amount);
+            Balance -= amount;
+            Message_Type = "Cash Payment           ";
+            using (StreamWriter w = new StreamWriter(History_PATH, true, Encoding.GetEncoding(1251)))
+            {
+                w.WriteLine($"{Message_Type,-37} | -{amount,-7} | {Balance,-8} | {DateTime.Now}");
+                w.WriteLine("-----------------------------------------------------------------------------------------");
+            }
         }
-        // Совершить оплату
-        public void Money_Payment(int amount)
+
+        // Make a transfer
+        public void Money_Transfer_From(double amount,  ref BankAccount Sender)
         {
-            amount *= amount > 0 ? -1 : 1;
+            Message_Type = "Cash Transfer FROM ";
+            amount = Math.Abs(amount);
             Balance += amount;
-            History_Actions.Add(new History_Actions("Cash Payment ", Convert.ToString(amount), Balance));
+            string who = '<' + Sender.User_Name + "(" + Sender.ID + ")>";
+
+            using (StreamWriter w = new StreamWriter(History_PATH, true, Encoding.GetEncoding(1251)))
+            {
+                w.WriteLine($"{Message_Type,15}  {who,-16} | +{amount,-7} | {Balance,-8} | {DateTime.Now}");
+                w.WriteLine("-----------------------------------------------------------------------------------------");
+            }
         }
-        public void Show_Balance() => Console.WriteLine(Balance);
+        public void Money_Transfer_To(double amount, ref BankAccount Reciever)
+        {
+            amount = Math.Abs(amount);
+            Balance -= amount;
+            Message_Type = "Cash Transfer TO   ";
+            string who = '<' + Reciever.User_Name + "(" + Reciever.ID + ")>";
+
+            using (StreamWriter w = new StreamWriter(History_PATH, true, Encoding.GetEncoding(1251)))
+            {
+                w.WriteLine($"{Message_Type,15}  {who,-16} | -{amount,-7} | {Balance,-8} | {DateTime.Now}");
+                w.WriteLine("-----------------------------------------------------------------------------------------");
+            }
+        }
         public void Show_History()
         {
-            Console.WriteLine(
-                $"----------------------------------------------" +
-                $"\nUSER NAME : {user_name}\n" +
-                $"----------------------------------------------"
-                );
-            foreach (var i in History_Actions) Console.WriteLine(i);
-        }
-        public static int Count() => account_count;
+            bool has_changed = false;
 
-            
+            Console.WriteLine(
+                $"-----------------------------------------------------------------------------------------" +
+                $"\nUSER NAME : {User_Name}\n" +
+                $"-----------------------------------------------------------------------------------------"
+                );
+            string[] History_Ac = File.ReadAllLines(History_PATH);
+            foreach (var line in History_Ac)
+            {
+                bool in_breackets = false;
+                for (int i = 0; i < line.Length ; i++)
+                {
+                    if (line[i] == '<') in_breackets = true;
+                    if (line[i] == '>')
+                    {
+                        Console.Write(line[i]);
+                        in_breackets = false;
+                        continue;
+                    }
+                    if (in_breackets)
+                    {
+                        if (!has_changed)
+                        {
+                            Theme_Color = Theme_Color == true ? false : true;
+                            has_changed = true;
+                        }
+                        Set_Theme(Theme_Color); // Ставим тему (светлая)
+                    }
+                    else
+                    {
+                        if (has_changed)
+                        {
+                            Theme_Color = Theme_Color == false ? true : false;
+                            has_changed = false;
+                        }
+                        Set_Theme(Theme_Color); // Ставим тему (темная)
+                    }
+                    Console.Write(line[i]);
+                }
+                Console.WriteLine();
+            }
+        }
+        public void Get_Info()
+        {
+            Console.Clear();
+            Console.WriteLine("-------------------------");
+            Console.WriteLine($"NAME : {User_Name}\nBALANCE : {Balance} \nID: {ID}");
+            Console.WriteLine("Действия : ");
+            Console.WriteLine("1 - Пополнить счет.");
+            Console.WriteLine("2 - Совершить оплату.");
+            Console.WriteLine("3 - Совершить перевод.");
+            Console.WriteLine("4 - Войти на Трейд-площадку");
+            Console.WriteLine("5 - Настройки");
+            Console.WriteLine("6 - Посмотреть историю.");
+            Console.WriteLine("7 - Выход из аккаунта.");
+            Console.WriteLine("-------------------------");
+        }
+        // Count of users
+        public override string ToString() => $"{User_Name} {PASSWORD} {Balance} {ID} {Theme_Color}";
+        public static int Count() => account_count;
     }
 }
